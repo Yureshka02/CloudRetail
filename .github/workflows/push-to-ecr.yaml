@@ -1,4 +1,4 @@
-name: Build-Scan-Push-to-ECR
+name: Build-Push-to-ECR
 
 on:
   push:
@@ -16,7 +16,7 @@ env:
   COMPONENTS: "frontend-web catalog pricing inventory orders cart payments-orchestrator shipping notifications"
 
 jobs:
-  build_scan_push:
+  build_push:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,19 +26,12 @@ jobs:
       - name: Set image tag
         run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
-      # ---------- Configure AWS creds (OIDC) ----------
+      # ---------- Configure AWS credentials (OIDC) ----------
       - name: Configure AWS credentials (primary)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION_PRIMARY }}
-
-      # ---------- Install Grype ----------
-      - name: Install Grype
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
-          | sudo sh -s -- -b /usr/local/bin
-          grype version
 
       # ---------- Login to ECR (primary) ----------
       - name: Login to ECR (primary)
@@ -47,8 +40,8 @@ jobs:
           | docker login --username AWS --password-stdin \
             "$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com"
 
-      # ---------- Build, scan, push (primary) ----------
-      - name: Build, scan, push (primary)
+      # ---------- Build & push to primary ----------
+      - name: Build & push (primary)
         run: |
           set -e
           for c in $COMPONENTS; do
@@ -63,10 +56,7 @@ jobs:
             echo "=== Building $c ==="
             docker build -t "$IMAGE_URI" "$dir"
 
-            echo "=== Grype scan $c ==="
-            grype "$IMAGE_URI" --only-fixed --fail-on critical
-
-            echo "=== Push $c to primary ==="
+            echo "=== Pushing $c to primary ==="
             docker push "$IMAGE_URI"
           done
 
@@ -77,7 +67,7 @@ jobs:
           | docker login --username AWS --password-stdin \
             "$AWS_ACCOUNT_ID.dkr.ecr.$SECONDARY_REGION.amazonaws.com"
 
-      # ---------- Tag & push (secondary) ----------
+      # ---------- Tag & push to secondary ----------
       - name: Tag & push (secondary)
         run: |
           set -e

@@ -1,4 +1,4 @@
-name: Build-Scan-Push-Deploy
+name: Build-Scan-Push-to-ECR
 
 on:
   push:
@@ -16,15 +16,8 @@ env:
   # Repo/image names (must exist as ECR repositories in both regions)
   COMPONENTS: "frontend-web catalog pricing inventory orders cart payments-orchestrator shipping notifications"
 
-  # ECS (needed for deploy)
-  ECS_CLUSTER_PRIMARY: ${{ secrets.ECS_CLUSTER_PRIMARY }}
-  ECS_CLUSTER_SECONDARY: ${{ secrets.ECS_CLUSTER_SECONDARY }}
-  ECS_EXEC_ROLE_ARN: ${{ secrets.ECS_EXEC_ROLE_ARN }}
-  ECS_TASK_ROLE_ARN: ${{ secrets.ECS_TASK_ROLE_ARN }}
-  CW_LOG_GROUP: ${{ secrets.CW_LOG_GROUP }}
-
 jobs:
-  build_scan_push_deploy:
+  build_scan_push:
     runs-on: ubuntu-latest
 
     steps:
@@ -42,8 +35,6 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION_PRIMARY }}
 
       # ---------- Unit tests (best-effort) ----------
-      # If you have root-level tests, add them here.
-      # For each Node service/Next.js, it runs npm test if defined.
       - name: Run tests (if present)
         run: |
           set -e
@@ -57,6 +48,8 @@ jobs:
             if [ -f "$dir/package.json" ]; then
               echo "=== Testing $c ==="
               (cd "$dir" && npm ci && npm test --if-present)
+            else
+              echo "=== Skipping tests for $c (no package.json) ==="
             fi
           done
 
@@ -114,114 +107,3 @@ jobs:
             echo "=== Push $c to secondary ==="
             docker push "$SECONDARY_URI"
           done
-
-      # ---------- Deploy to ECS PRIMARY (register task def + update service) ----------
-      - name: Deploy ECS (primary)
-        if: ${{ secrets.ECS_CLUSTER_PRIMARY != '' }}
-        run: |
-          set -e
-
-          deploy_one () {
-            local component="$1"
-            local taskdef_file="$2"
-            local family="$3"
-            local service_name="$4"
-
-            echo "=== Rendering taskdef for $component in $PRIMARY_REGION ==="
-
-            # Replace placeholders for primary region
-            sed -e "s|<ACCOUNT_ID>|$AWS_ACCOUNT_ID|g" \
-                -e "s|<REGION>|$PRIMARY_REGION|g" \
-                -e "s|<EXEC_ROLE_ARN>|$ECS_EXEC_ROLE_ARN|g" \
-                -e "s|<TASK_ROLE_ARN>|$ECS_TASK_ROLE_ARN|g" \
-                -e "s|<LOG_GROUP_NAME>|$CW_LOG_GROUP|g" \
-                "$taskdef_file" > rendered.json
-
-            # Replace image tag in rendered.json (latest -> sha)
-            # Assumes image ends with :latest in template
-            sed -i "s|:latest|:$IMAGE_TAG|g" rendered.json
-
-            echo "=== Register task definition: $family ==="
-            TASKDEF_ARN=$(aws ecs register-task-definition \
-              --region "$PRIMARY_REGION" \
-              --cli-input-json file://rendered.json \
-              --query "taskDefinition.taskDefinitionArn" \
-              --output text)
-
-            echo "=== Update service: $service_name ==="
-            aws ecs update-service \
-              --region "$PRIMARY_REGION" \
-              --cluster "$ECS_CLUSTER_PRIMARY" \
-              --service "$service_name" \
-              --task-definition "$TASKDEF_ARN" \
-              --force-new-deployment
-
-            echo "=== Wait service stable: $service_name ==="
-            aws ecs wait services-stable \
-              --region "$PRIMARY_REGION" \
-              --cluster "$ECS_CLUSTER_PRIMARY" \
-              --services "$service_name"
-          }
-
-          # Map ECS service names (adjust to your actual service names)
-          deploy_one "frontend-web" "infra/taskdef/frontend-web.json" "cloudretail-frontend-web" "cloudretail-frontend-web-svc"
-          deploy_one "catalog" "infra/taskdef/catalog.json" "cloudretail-catalog" "cloudretail-catalog-svc"
-          deploy_one "pricing" "infra/taskdef/pricing.json" "cloudretail-pricing" "cloudretail-pricing-svc"
-          deploy_one "inventory" "infra/taskdef/inventory.json" "cloudretail-inventory" "cloudretail-inventory-svc"
-          deploy_one "orders" "infra/taskdef/orders.json" "cloudretail-orders" "cloudretail-orders-svc"
-          deploy_one "cart" "infra/taskdef/cart.json" "cloudretail-cart" "cloudretail-cart-svc"
-          deploy_one "payments-orchestrator" "infra/taskdef/payments-orchestrator.json" "cloudretail-payments-orchestrator" "cloudretail-payments-orchestrator-svc"
-          deploy_one "shipping" "infra/taskdef/shipping.json" "cloudretail-shipping" "cloudretail-shipping-svc"
-          deploy_one "notifications" "infra/taskdef/notifications.json" "cloudretail-notifications" "cloudretail-notifications-svc"
-
-      # ---------- Deploy to ECS SECONDARY ----------
-      - name: Deploy ECS (secondary)
-        if: ${{ secrets.ECS_CLUSTER_SECONDARY != '' }}
-        run: |
-          set -e
-
-          deploy_one () {
-            local component="$1"
-            local taskdef_file="$2"
-            local family="$3"
-            local service_name="$4"
-
-            echo "=== Rendering taskdef for $component in $SECONDARY_REGION ==="
-
-            sed -e "s|<ACCOUNT_ID>|$AWS_ACCOUNT_ID|g" \
-                -e "s|<REGION>|$SECONDARY_REGION|g" \
-                -e "s|<EXEC_ROLE_ARN>|$ECS_EXEC_ROLE_ARN|g" \
-                -e "s|<TASK_ROLE_ARN>|$ECS_TASK_ROLE_ARN|g" \
-                -e "s|<LOG_GROUP_NAME>|$CW_LOG_GROUP|g" \
-                "$taskdef_file" > rendered.json
-
-            sed -i "s|:latest|:$IMAGE_TAG|g" rendered.json
-
-            TASKDEF_ARN=$(aws ecs register-task-definition \
-              --region "$SECONDARY_REGION" \
-              --cli-input-json file://rendered.json \
-              --query "taskDefinition.taskDefinitionArn" \
-              --output text)
-
-            aws ecs update-service \
-              --region "$SECONDARY_REGION" \
-              --cluster "$ECS_CLUSTER_SECONDARY" \
-              --service "$service_name" \
-              --task-definition "$TASKDEF_ARN" \
-              --force-new-deployment
-
-            aws ecs wait services-stable \
-              --region "$SECONDARY_REGION" \
-              --cluster "$ECS_CLUSTER_SECONDARY" \
-              --services "$service_name"
-          }
-
-          deploy_one "frontend-web" "infra/taskdef/frontend-web.json" "cloudretail-frontend-web" "cloudretail-frontend-web-svc"
-          deploy_one "catalog" "infra/taskdef/catalog.json" "cloudretail-catalog" "cloudretail-catalog-svc"
-          deploy_one "pricing" "infra/taskdef/pricing.json" "cloudretail-pricing" "cloudretail-pricing-svc"
-          deploy_one "inventory" "infra/taskdef/inventory.json" "cloudretail-inventory" "cloudretail-inventory-svc"
-          deploy_one "orders" "infra/taskdef/orders.json" "cloudretail-orders" "cloudretail-orders-svc"
-          deploy_one "cart" "infra/taskdef/cart.json" "cloudretail-cart" "cloudretail-cart-svc"
-          deploy_one "payments-orchestrator" "infra/taskdef/payments-orchestrator.json" "cloudretail-payments-orchestrator" "cloudretail-payments-orchestrator-svc"
-          deploy_one "shipping" "infra/taskdef/shipping.json" "cloudretail-shipping" "cloudretail-shipping-svc"
-          deploy_one "notifications" "infra/taskdef/notifications.json" "cloudretail-notifications" "cloudretail-notifications-svc"

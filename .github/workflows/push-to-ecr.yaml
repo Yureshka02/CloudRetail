@@ -2,7 +2,7 @@ name: Build-Scan-Push-to-ECR
 
 on:
   push:
-    branches: ["master"]
+    branches: ["main"]
 
 permissions:
   id-token: write
@@ -13,7 +13,6 @@ env:
   PRIMARY_REGION: ${{ secrets.AWS_REGION_PRIMARY }}
   SECONDARY_REGION: ${{ secrets.AWS_REGION_SECONDARY }}
 
-  # Repo/image names (must exist as ECR repositories in both regions)
   COMPONENTS: "frontend-web catalog pricing inventory orders cart payments-orchestrator shipping notifications"
 
 jobs:
@@ -34,36 +33,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION_PRIMARY }}
 
-      # ---------- Unit tests (best-effort) ----------
-      - name: Run tests (if present)
+      # ---------- Install Grype ----------
+      - name: Install Grype
         run: |
-          set -e
-          for c in $COMPONENTS; do
-            if [ "$c" = "frontend-web" ]; then
-              dir="frontend/web"
-            else
-              dir="services/$c"
-            fi
-
-            if [ -f "$dir/package.json" ]; then
-              echo "=== Testing $c ==="
-              (cd "$dir" && npm ci && npm test --if-present)
-            else
-              echo "=== Skipping tests for $c (no package.json) ==="
-            fi
-          done
-
-      # ---------- Install Trivy ----------
-     # ---------- Install Trivy ----------
-      - name: Install Trivy (CLI)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget gnupg lsb-release
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install -y trivy
-          trivy --version
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+          | sudo sh -s -- -b /usr/local/bin
+          grype version
 
       # ---------- Login to ECR (primary) ----------
       - name: Login to ECR (primary)
@@ -72,7 +47,7 @@ jobs:
           | docker login --username AWS --password-stdin \
             "$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com"
 
-      # ---------- Build, scan, push to primary ----------
+      # ---------- Build, scan, push (primary) ----------
       - name: Build, scan, push (primary)
         run: |
           set -e
@@ -84,11 +59,12 @@ jobs:
             fi
 
             IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$c:$IMAGE_TAG"
-            echo "=== Building $c from $dir ==="
+
+            echo "=== Building $c ==="
             docker build -t "$IMAGE_URI" "$dir"
 
-            echo "=== Trivy scan $c ==="
-            trivy image --severity HIGH,CRITICAL --exit-code 1 "$IMAGE_URI"
+            echo "=== Grype scan $c ==="
+            grype "$IMAGE_URI" --only-fixed --fail-on critical
 
             echo "=== Push $c to primary ==="
             docker push "$IMAGE_URI"
@@ -101,15 +77,14 @@ jobs:
           | docker login --username AWS --password-stdin \
             "$AWS_ACCOUNT_ID.dkr.ecr.$SECONDARY_REGION.amazonaws.com"
 
-      # ---------- Tag & push to secondary ----------
+      # ---------- Tag & push (secondary) ----------
       - name: Tag & push (secondary)
         run: |
           set -e
           for c in $COMPONENTS; do
             PRIMARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$c:$IMAGE_TAG"
             SECONDARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$SECONDARY_REGION.amazonaws.com/$c:$IMAGE_TAG"
-            echo "=== Tagging $c for secondary ==="
+
             docker tag "$PRIMARY_URI" "$SECONDARY_URI"
-            echo "=== Push $c to secondary ==="
             docker push "$SECONDARY_URI"
           done

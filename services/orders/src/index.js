@@ -8,5 +8,8 @@ const PORT = process.env.PORT || 8080;
 
 app.get("/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
 app.get("/", (req, res) => res.status(200).json({ service: SERVICE, status: "running" }));
+app.get("/orders", (req, res) => {
+  res.status(200).json({ orders: [] });
+});
 
 app.listen(PORT, () => console.log(`${SERVICE} listening on ${PORT}`));

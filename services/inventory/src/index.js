@@ -81,4 +81,9 @@ app.post("/inventory/reserve", reserveHandler);
 // optional direct
 app.post("/reserve", reserveHandler);
 
+app.post("/inventory/ping", (req, res) => {
+  res.json({ ok: true, method: "POST", gotBody: req.body });
+});
+
+
 app.listen(PORT, () => console.log(`${SERVICE} listening on ${PORT}`));

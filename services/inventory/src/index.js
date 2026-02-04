@@ -1,22 +1,11 @@
 import express from "express";
+import cors from "cors";
 import { getInventory, putInventoryItem, decrementStock } from "./db.js";
 
 const app = express();
 
-// ===== CORS MIDDLEWARE - FIXED VERSION =====
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Max-Age", "86400"); // Cache preflight for 24 hours
-  
-  // Handle preflight OPTIONS requests
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  
-  next();
-});
+// ===== CORS - USING PACKAGE =====
+app.use(cors());
 // ===== END CORS =====
 
 app.use(express.json());
@@ -93,3 +82,4 @@ app.post("/inventory/ping", (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`${SERVICE} listening on ${PORT}`));
+

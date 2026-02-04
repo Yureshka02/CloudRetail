@@ -4,9 +4,26 @@ import { getInventory, putInventoryItem, decrementStock } from "./db.js";
 
 const app = express();
 
-// ===== CORS - USING PACKAGE =====
-app.use(cors());
-// ===== END CORS =====
+// Define allowed origins
+const ALLOWED_ORIGINS = [
+  "https://cr-client-chi.vercel.app",
+  "http://localhost:3000",
+  "http://192.168.1.6:3000"
+];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // curl/postman
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    return cb(new Error("CORS blocked: " + origin));
+  },
+  methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"],
+  maxAge: 86400,
+}));
+
+// ✅ IMPORTANT: Always short-circuit preflight so it never hits seedHandler
+app.options("*", (req, res) => res.sendStatus(204));
 
 app.use(express.json());
 
@@ -66,20 +83,15 @@ app.get("/health", (req, res) => res.status(200).json({ ok: true, service: SERVI
 app.get("/inventory/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
 
 app.get("/", (req, res) => res.status(200).json({ service: SERVICE, status: "running" }));
-//app.post("/inventory", seedHandler);
 
 app.get("/inventory/:sku", getSkuHandler);
-//app.get("/:sku", getSkuHandler);
 
 app.post("/inventory/seed", seedHandler);
-//app.post("/seed", seedHandler);
 
 app.post("/inventory/reserve", reserveHandler);
-//app.post("/reserve", reserveHandler);
 
 app.post("/inventory/ping", (req, res) => {
   res.json({ ok: true, method: "POST", gotBody: req.body });
 });
 
 app.listen(PORT, () => console.log(`${SERVICE} listening on ${PORT}`));
-

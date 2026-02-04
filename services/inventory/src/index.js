@@ -64,7 +64,7 @@ app.get("/inventory/health", (req, res) => res.status(200).json({ ok: true, serv
 
 // Root (optional, helps you verify service behind /inventory)
 app.get("/", (req, res) => res.status(200).json({ service: SERVICE, status: "running" }));
-app.get("/inventory", (req, res) => res.status(200).json({ service: SERVICE, status: "running" }));
+app.post("/inventory", seedHandler);
 
 // GET sku
 app.get("/inventory/:sku", getSkuHandler);

@@ -3,20 +3,21 @@ import { getInventory, putInventoryItem, decrementStock } from "./db.js";
 
 const app = express();
 
-// ===== CORS MIDDLEWARE - ADD THIS BEFORE express.json() =====
+// ===== CORS MIDDLEWARE - FIXED VERSION =====
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Max-Age", "86400"); // Cache preflight for 24 hours
   
   // Handle preflight OPTIONS requests
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return res.sendStatus(200);
   }
   
   next();
 });
-// ===== END CORS MIDDLEWARE =====
+// ===== END CORS =====
 
 app.use(express.json());
 
@@ -71,30 +72,20 @@ async function getSkuHandler(req, res) {
   }
 }
 
-// ---- routes (both non-prefixed and /inventory-prefixed) ----
-
-// Health (for direct ALB checks)
+// ---- routes ----
 app.get("/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
-// Health behind API Gateway route prefix
 app.get("/inventory/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
 
-// Root (optional, helps you verify service behind /inventory)
 app.get("/", (req, res) => res.status(200).json({ service: SERVICE, status: "running" }));
 app.post("/inventory", seedHandler);
 
-// GET sku
 app.get("/inventory/:sku", getSkuHandler);
-// optional: also allow without prefix (only if you ever call service directly)
 app.get("/:sku", getSkuHandler);
 
-// Seed
 app.post("/inventory/seed", seedHandler);
-// optional direct
 app.post("/seed", seedHandler);
 
-// Reserve
 app.post("/inventory/reserve", reserveHandler);
-// optional direct
 app.post("/reserve", reserveHandler);
 
 app.post("/inventory/ping", (req, res) => {

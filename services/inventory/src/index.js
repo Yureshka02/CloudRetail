@@ -7,23 +7,8 @@ app.use(express.json());
 const SERVICE = process.env.SERVICE_NAME || "inventory";
 const PORT = process.env.PORT || 8080;
 
-// health
-app.get("/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
-
-// ✅ Step G route 1: GET /inventory/:sku
-app.get("/inventory/:sku", async (req, res) => {
-  try {
-    const item = await getInventory(req.params.sku);
-    if (!item) return res.status(404).json({ message: "Not found" });
-    res.json(item);
-  } catch (e) {
-    res.status(500).json({ message: "Error", error: String(e) });
-  }
-});
-
-// ✅ Step G route 2: POST /inventory/seed
-// body: { sku: "ABC", stock: 10, price: 100 }
-app.post("/inventory/seed", async (req, res) => {
+// ---- helpers ----
+async function seedHandler(req, res) {
   try {
     const { sku, stock, price } = req.body;
     if (!sku || typeof stock !== "number") {
@@ -37,29 +22,63 @@ app.post("/inventory/seed", async (req, res) => {
       updatedAt: new Date().toISOString(),
     });
 
-    res.status(201).json({ ok: true, sku });
+    return res.status(201).json({ ok: true, sku });
   } catch (e) {
-    res.status(500).json({ message: "Error", error: String(e) });
+    return res.status(500).json({ message: "Error", error: String(e) });
   }
-});
+}
 
-// Optional (useful later for saga): POST /inventory/reserve
-// body: { sku:"ABC", qty:2 }
-app.post("/inventory/reserve", async (req, res) => {
+async function reserveHandler(req, res) {
   try {
     const { sku, qty } = req.body;
     if (!sku || typeof qty !== "number") {
       return res.status(400).json({ message: "sku and qty required" });
     }
+
     const updated = await decrementStock(sku, qty);
-    res.json({ ok: true, updated });
+    return res.json({ ok: true, updated });
   } catch (e) {
-    // conditional failure means insufficient stock
     if (String(e).includes("ConditionalCheckFailed")) {
       return res.status(409).json({ ok: false, message: "Insufficient stock" });
     }
-    res.status(500).json({ message: "Error", error: String(e) });
+    return res.status(500).json({ message: "Error", error: String(e) });
   }
-});
+}
+
+async function getSkuHandler(req, res) {
+  try {
+    const item = await getInventory(req.params.sku);
+    if (!item) return res.status(404).json({ message: "Not found" });
+    return res.json(item);
+  } catch (e) {
+    return res.status(500).json({ message: "Error", error: String(e) });
+  }
+}
+
+// ---- routes (both non-prefixed and /inventory-prefixed) ----
+
+// Health (for direct ALB checks)
+app.get("/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
+// Health behind API Gateway route prefix
+app.get("/inventory/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
+
+// Root (optional, helps you verify service behind /inventory)
+app.get("/", (req, res) => res.status(200).json({ service: SERVICE, status: "running" }));
+app.get("/inventory", (req, res) => res.status(200).json({ service: SERVICE, status: "running" }));
+
+// GET sku
+app.get("/inventory/:sku", getSkuHandler);
+// optional: also allow without prefix (only if you ever call service directly)
+app.get("/:sku", getSkuHandler);
+
+// Seed
+app.post("/inventory/seed", seedHandler);
+// optional direct
+app.post("/seed", seedHandler);
+
+// Reserve
+app.post("/inventory/reserve", reserveHandler);
+// optional direct
+app.post("/reserve", reserveHandler);
 
 app.listen(PORT, () => console.log(`${SERVICE} listening on ${PORT}`));

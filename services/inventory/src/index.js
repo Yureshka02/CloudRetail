@@ -66,16 +66,16 @@ app.get("/health", (req, res) => res.status(200).json({ ok: true, service: SERVI
 app.get("/inventory/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
 
 app.get("/", (req, res) => res.status(200).json({ service: SERVICE, status: "running" }));
-app.post("/inventory", seedHandler);
+//app.post("/inventory", seedHandler);
 
 app.get("/inventory/:sku", getSkuHandler);
-app.get("/:sku", getSkuHandler);
+//app.get("/:sku", getSkuHandler);
 
 app.post("/inventory/seed", seedHandler);
-app.post("/seed", seedHandler);
+//app.post("/seed", seedHandler);
 
 app.post("/inventory/reserve", reserveHandler);
-app.post("/reserve", reserveHandler);
+//app.post("/reserve", reserveHandler);
 
 app.post("/inventory/ping", (req, res) => {
   res.json({ ok: true, method: "POST", gotBody: req.body });

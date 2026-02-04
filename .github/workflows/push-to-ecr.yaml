@@ -1,8 +1,11 @@
-name: Build-Push-to-ECR
+name: Build-Push-Notifications-to-ECR
 
 on:
   push:
     branches: ["master"]
+    # Optional: Only trigger if files in the notifications folder change
+    paths:
+      - 'services/notifications/**'
 
 permissions:
   id-token: write
@@ -12,8 +15,8 @@ env:
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   PRIMARY_REGION: ${{ secrets.AWS_REGION_PRIMARY }}
   SECONDARY_REGION: ${{ secrets.AWS_REGION_SECONDARY }}
-
-  COMPONENTS: "frontend-web catalog pricing inventory orders cart payments-orchestrator shipping notifications"
+  # Updated to only include notifications
+  COMPONENT: "notifications"
 
 jobs:
   build_push:
@@ -44,21 +47,15 @@ jobs:
       - name: Build & push (primary)
         run: |
           set -e
-          for c in $COMPONENTS; do
-            if [ "$c" = "frontend-web" ]; then
-              dir="frontend/web"
-            else
-              dir="services/$c"
-            fi
+          # Points specifically to your notifications folder
+          DIR="services/$COMPONENT"
+          IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$COMPONENT:$IMAGE_TAG"
 
-            IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$c:$IMAGE_TAG"
+          echo "=== Building $COMPONENT ==="
+          docker build -t "$IMAGE_URI" "$DIR"
 
-            echo "=== Building $c ==="
-            docker build -t "$IMAGE_URI" "$dir"
-
-            echo "=== Pushing $c to primary ==="
-            docker push "$IMAGE_URI"
-          done
+          echo "=== Pushing $COMPONENT to primary ==="
+          docker push "$IMAGE_URI"
 
       # ---------- Login to ECR (secondary) ----------
       - name: Login to ECR (secondary)
@@ -71,10 +68,11 @@ jobs:
       - name: Tag & push (secondary)
         run: |
           set -e
-          for c in $COMPONENTS; do
-            PRIMARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$c:$IMAGE_TAG"
-            SECONDARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$SECONDARY_REGION.amazonaws.com/$c:$IMAGE_TAG"
+          PRIMARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$COMPONENT:$IMAGE_TAG"
+          SECONDARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$SECONDARY_REGION.amazonaws.com/$COMPONENT:$IMAGE_TAG"
 
-            docker tag "$PRIMARY_URI" "$SECONDARY_URI"
-            docker push "$SECONDARY_URI"
-          done
+          echo "=== Tagging $COMPONENT for secondary ==="
+          docker tag "$PRIMARY_URI" "$SECONDARY_URI"
+          
+          echo "=== Pushing $COMPONENT to secondary ==="
+          docker push "$SECONDARY_URI"

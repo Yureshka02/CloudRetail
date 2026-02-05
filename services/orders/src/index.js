@@ -11,6 +11,7 @@ app.use(cors({
   allowedHeaders: ["Content-Type","Authorization","x-user-sub"],
   maxAge: 86400
 }));
+
 app.options("*", (req, res) => res.sendStatus(204));
 app.use(express.json());
 
@@ -25,7 +26,7 @@ app.get("/", (req, res) => res.json({ ok: true, service: SERVICE }));
 function getUserId(req) {
   const h = req.headers["x-user-sub"];
   if (h && typeof h === "string") return h;
-
+  
   // fallback: decode JWT payload without verifying signature (API GW already verified)
   const auth = req.headers.authorization || "";
   const parts = auth.split(" ");
@@ -41,12 +42,12 @@ function getUserId(req) {
   return null;
 }
 
-// GET /orders (my orders) - JWT protected by API Gateway
-app.get("/orders", async (req, res) => {
+// GET /orders/list - Get all orders for the user
+app.get("/orders/list", async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Missing user identity" });
-
+    
     const items = await listOrdersByUser(userId, 50);
     res.json(items);
   } catch (e) {
@@ -54,24 +55,25 @@ app.get("/orders", async (req, res) => {
   }
 });
 
-// POST /orders - place order, decrement inventory atomically
-app.post("/orders", async (req, res) => {
+// POST /orders/create - Place a new order
+app.post("/orders/create", async (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Missing user identity" });
-
+    
     const { sku, qty, shippingAddress, phone } = req.body;
+    
     if (!sku || typeof qty !== "number" || qty <= 0) {
       return res.status(400).json({ message: "sku and qty required" });
     }
-
+    
     const inv = await getInventoryItem(sku);
     if (!inv) return res.status(404).json({ message: "SKU not found" });
-
+    
     const priceAtPurchase = inv.price ?? null;
     const orderId = uuidv4();
     const createdAt = new Date().toISOString();
-
+    
     await placeOrderTxn({
       userId,
       sku,
@@ -81,7 +83,7 @@ app.post("/orders", async (req, res) => {
       createdAt,
       pii: { shippingAddress, phone }
     });
-
+    
     res.status(201).json({ ok: true, orderId, sku, qty });
   } catch (e) {
     // DynamoDB condition failed => insufficient stock or missing SKU
@@ -92,4 +94,4 @@ app.post("/orders", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`${SERVICE} listening on ${PORT}`));
+app.listen(PORT, () => console.log`${SERVICE} listening on ${PORT}`));

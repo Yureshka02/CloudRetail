@@ -94,4 +94,4 @@ app.post("/orders/create", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log`${SERVICE} listening on ${PORT}`));
+app.listen(PORT, () => console.log`${SERVICE} listening on ${PORT}`);

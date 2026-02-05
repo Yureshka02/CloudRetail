@@ -90,6 +90,12 @@ app.post("/inventory/seed", seedHandler);
 
 app.post("/inventory/reserve", reserveHandler);
 
+app.get("/inventory/available", async (req, res) => {
+  const items = await listAvailableInventory(50);
+  res.json(items);
+});
+
+
 app.post("/inventory/ping", (req, res) => {
   res.json({ ok: true, method: "POST", gotBody: req.body });
 });

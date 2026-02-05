@@ -1,11 +1,11 @@
-name: Build-Push-orders-to-ECR
+name: Build-Push-inventory-to-ECR
 
 on:
   push:
     branches: ["master"]
-    # Optional: Only trigger if files in the orders folder change
+    # Optional: Only trigger if files in the inventory folder change
     paths:
-      - 'services/orders/**'
+      - 'services/inventory/**'
 
 permissions:
   id-token: write
@@ -15,8 +15,8 @@ env:
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   PRIMARY_REGION: ${{ secrets.AWS_REGION_PRIMARY }}
   SECONDARY_REGION: ${{ secrets.AWS_REGION_SECONDARY }}
-  # Updated to only include orders
-  COMPONENT: "orders"
+  # Updated to only include inventory
+  COMPONENT: "inventory"
 
 jobs:
   build_push:
@@ -47,7 +47,7 @@ jobs:
       - name: Build & push (primary)
         run: |
           set -e
-          # Points specifically to your orders folder
+          # Points specifically to your inventory folder
           DIR="services/$COMPONENT"
           IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$COMPONENT:$IMAGE_TAG"
 

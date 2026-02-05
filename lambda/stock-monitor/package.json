@@ -1,0 +1,13 @@
+
+
+{
+  "name": "stock-monitor",
+    "version": "1.0.0",
+    "type": "module",
+    "main": "index.js",
+    "dependencies": {
+        "@aws-sdk/client-dynamodb": "^3.982.0",
+        "@aws-sdk/lib-dynamodb": "^3.982.0",
+        "@aws-sdk/client-ses": "^3.982.0"
+        }
+}

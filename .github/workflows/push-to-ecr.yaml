@@ -1,9 +1,8 @@
-name: Build-Push-orders-to-ECR
+name: Build-Push-Orders-to-ECR
 
 on:
   push:
     branches: ["master"]
-    # Optional: Only trigger if files in the orders folder change
     paths:
       - 'services/orders/**'
 
@@ -15,7 +14,6 @@ env:
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   PRIMARY_REGION: ${{ secrets.AWS_REGION_PRIMARY }}
   SECONDARY_REGION: ${{ secrets.AWS_REGION_SECONDARY }}
-  # Updated to only include orders
   COMPONENT: "orders"
 
 jobs:
@@ -23,56 +21,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ---------- Checkout ----------
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ---------- Image tag ----------
       - name: Set image tag
         run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
-      # ---------- Configure AWS credentials (OIDC) ----------
+      # ---------- AWS credentials (OIDC) ----------
       - name: Configure AWS credentials (primary)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION_PRIMARY }}
 
-      # ---------- Login to ECR (primary) ----------
+      # ---------- Login ECR (primary) ----------
       - name: Login to ECR (primary)
         run: |
           aws ecr get-login-password --region "$PRIMARY_REGION" \
           | docker login --username AWS --password-stdin \
             "$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com"
 
-      # ---------- Build & push to primary ----------
-      - name: Build & push (primary)
+      # ---------- Build & push (primary) ----------
+      - name: Build & push orders (primary)
         run: |
           set -e
-          # Points specifically to your orders folder
-          DIR="services/$COMPONENT"
-          IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$COMPONENT:$IMAGE_TAG"
+          DIR="services/orders"
+          IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/orders:$IMAGE_TAG"
 
-          echo "=== Building $COMPONENT ==="
+          echo "=== Building orders ==="
           docker build -t "$IMAGE_URI" "$DIR"
 
-          echo "=== Pushing $COMPONENT to primary ==="
+          echo "=== Pushing orders to primary ==="
           docker push "$IMAGE_URI"
 
-      # ---------- Login to ECR (secondary) ----------
+      # ---------- Login ECR (secondary) ----------
       - name: Login to ECR (secondary)
         run: |
           aws ecr get-login-password --region "$SECONDARY_REGION" \
           | docker login --username AWS --password-stdin \
             "$AWS_ACCOUNT_ID.dkr.ecr.$SECONDARY_REGION.amazonaws.com"
 
-      # ---------- Tag & push to secondary ----------
-      - name: Tag & push (secondary)
+      # ---------- Tag & push (secondary) ----------
+      - name: Tag & push orders (secondary)
         run: |
           set -e
-          PRIMARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$COMPONENT:$IMAGE_TAG"
-          SECONDARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$SECONDARY_REGION.amazonaws.com/$COMPONENT:$IMAGE_TAG"
+          PRIMARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/orders:$IMAGE_TAG"
+          SECONDARY_URI="$AWS_ACCOUNT_ID.dkr.ecr.$SECONDARY_REGION.amazonaws.com/orders:$IMAGE_TAG"
 
-          echo "=== Tagging $COMPONENT for secondary ==="
+          echo "=== Tagging orders for secondary ==="
           docker tag "$PRIMARY_URI" "$SECONDARY_URI"
-          
-          echo "=== Pushing $COMPONENT to secondary ==="
+
+          echo "=== Pushing orders to secondary ==="
           docker push "$SECONDARY_URI"

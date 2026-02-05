@@ -1,11 +1,11 @@
-name: Build-Push-Notifications-to-ECR
+name: Build-Push-orders-to-ECR
 
 on:
   push:
     branches: ["master"]
-    # Optional: Only trigger if files in the notifications folder change
+    # Optional: Only trigger if files in the orders folder change
     paths:
-      - 'services/notifications/**'
+      - 'services/orders/**'
 
 permissions:
   id-token: write
@@ -15,8 +15,8 @@ env:
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   PRIMARY_REGION: ${{ secrets.AWS_REGION_PRIMARY }}
   SECONDARY_REGION: ${{ secrets.AWS_REGION_SECONDARY }}
-  # Updated to only include notifications
-  COMPONENT: "notifications"
+  # Updated to only include orders
+  COMPONENT: "orders"
 
 jobs:
   build_push:
@@ -47,7 +47,7 @@ jobs:
       - name: Build & push (primary)
         run: |
           set -e
-          # Points specifically to your notifications folder
+          # Points specifically to your orders folder
           DIR="services/$COMPONENT"
           IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$PRIMARY_REGION.amazonaws.com/$COMPONENT:$IMAGE_TAG"
 

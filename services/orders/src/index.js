@@ -19,6 +19,7 @@ const SERVICE = process.env.SERVICE_NAME || "orders";
 
 // health
 app.get("/health", (req, res) => res.json({ ok: true, service: SERVICE }));
+app.get("/", (req, res) => res.json({ ok: true, service: SERVICE }));
 
 // Helper: get userId (sub) passed from API Gateway, fallback to token decode
 function getUserId(req) {

@@ -5,7 +5,7 @@ on:
     branches: ["master"]
     # Optional: Only trigger if files in the orders folder change
     paths:
-      - 'services/orders/**'
+      - 'services/pricing/**'
 
 permissions:
   id-token: write

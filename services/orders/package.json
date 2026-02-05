@@ -8,10 +8,8 @@
     "test": "node -e \"console.log('no tests yet')\""
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.983.0",
-    "@aws-sdk/lib-dynamodb": "^3.983.0",
-    "cors": "^2.8.6",
-    "express": "^4.22.1",
-    "uuid": "^13.0.0"
+    "@aws-sdk/client-dynamodb": "^3.982.0",
+    "@aws-sdk/lib-dynamodb": "^3.982.0",
+    "express": "^4.19.2"
   }
 }

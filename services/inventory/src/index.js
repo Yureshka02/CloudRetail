@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { getInventory, putInventoryItem, decrementStock } from "./db.js";
+import { getInventory, putInventoryItem, decrementStock, listAvailableInventory } from "./db.js";
 
 const app = express();
 

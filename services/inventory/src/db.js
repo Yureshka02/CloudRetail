@@ -32,6 +32,18 @@ export async function putInventoryItem(item) {
   );
 }
 
+export async function listAvailableInventory(limit = 50) {
+  const out = await ddb.send(new ScanCommand({
+    TableName: INVENTORY_TABLE,
+    FilterExpression: "#s > :z",
+    ExpressionAttributeNames: { "#s": "stock" },
+    ExpressionAttributeValues: { ":z": 0 },
+    Limit: limit
+  }));
+  return out.Items || [];
+}
+
+
 export async function decrementStock(sku, qty) {
   const out = await ddb.send(
     new UpdateCommand({

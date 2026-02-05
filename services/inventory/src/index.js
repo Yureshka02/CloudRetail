@@ -81,23 +81,20 @@ async function getSkuHandler(req, res) {
 // ---- routes ----
 app.get("/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
 app.get("/inventory/health", (req, res) => res.status(200).json({ ok: true, service: SERVICE }));
-
 app.get("/", (req, res) => res.status(200).json({ service: SERVICE, status: "running" }));
 
-app.get("/inventory/:sku", getSkuHandler);
-
-app.post("/inventory/seed", seedHandler);
-
-app.post("/inventory/reserve", reserveHandler);
 
 app.get("/inventory/available", async (req, res) => {
   const items = await listAvailableInventory(50);
   res.json(items);
 });
 
-
+app.post("/inventory/seed", seedHandler);
+app.post("/inventory/reserve", reserveHandler);
 app.post("/inventory/ping", (req, res) => {
   res.json({ ok: true, method: "POST", gotBody: req.body });
 });
 
+
+app.get("/inventory/:sku", getSkuHandler);
 app.listen(PORT, () => console.log(`${SERVICE} listening on ${PORT}`));
